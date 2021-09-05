@@ -17,15 +17,15 @@ from tflearn.activations import softmax
 from tflearn.layers.core import activation
 stemmer = LancasterStemmer()
 
-file = open("intents.json")
-data = json.load(file)
+with open("intents.json") as file:
+    data = json.load(file)
 
 try:
-    f = open("data.pickle", 'rb')
-    words, lables, training, output = pickle.load(f)
+    with open("data.pickle", "rb") as f:
+        words, labels, training, output = pickle.load(f)
 except:
     words = []
-    lables = []
+    labels = []
     docs_x = []
     docs_y = []
 
@@ -35,16 +35,16 @@ except:
             words.extend(wrds)
             docs_x.append(wrds)
             docs_y.append(intent['tag'])
-            if(intent['tag']not in lables):
-                lables.append(intent['tag'])
+            if(intent['tag']not in labels):
+                labels.append(intent['tag'])
 
     words = [stemmer.stem(w.lower())for w in words if w != "?"]
     words = sorted(list(set(words)))
-    lables = sorted(lables)
+    labels = sorted(labels)
 
     training = []
     output = []
-    out_empty = [0 for _ in range(len(lables))]
+    out_empty = [0 for _ in range(len(labels))]
 
     for x, doc in enumerate(docs_x):
         bag = []
@@ -56,7 +56,7 @@ except:
                 bag.append(0)
 
         output_row = out_empty[:]
-        output_row[lables.index(docs_y[x])] = 1
+        output_row[labels.index(docs_y[x])] = 1
 
         training.append(bag)
         output.append(output_row)
@@ -64,8 +64,8 @@ except:
     training = numpy.array(training)
     output = numpy.array(output)
 
-    f = open("data.pickle", 'wb')
-    pickle.dump((words, lables, training, output), f)
+    with open("data.pickle", "wb") as f:
+        pickle.dump((words, labels, training, output), f)
 
 
 ops.reset_default_graph()
@@ -80,3 +80,34 @@ try:
 except:
     model.fit(training, output, n_epoch=1000, batch_size=8, show_metric=True)
     model.save("model.tflearn")
+
+
+def bagOfWords(s, words):
+    bag = [0 for _ in range(len(words))]
+    s_words = nltk.word_tokenize(s)
+    s_words = list(stemmer.stem(word.lower())for word in s_words)
+    for se in s_words:
+        for i, w in enumerate(words):
+            if(w == se):
+                bag[i] = 1
+    return numpy.array(bag)
+
+
+def chat():
+    print("Start Talking with the bot (Type 'quit' to stop)")
+    while True:
+        inp = input("You: ")
+        if(inp.lower() == 'quit'):
+            print('GoodBye have a nice day')
+            break
+        result = model.predict([bagOfWords(inp, words)])
+        result_index = numpy.argmax(result)
+        tag = labels[result_index]
+        # print(tag)
+        for tg in data["intents"]:
+            if tg['tag'] == tag:
+                responses = tg['responses']
+        print(random.choice(responses))
+
+
+chat()
